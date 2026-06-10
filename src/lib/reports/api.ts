@@ -50,24 +50,53 @@ export async function getDailyReport(
   const start = dayStart(date);
   const end = dayEnd(date);
 
-  // 1. Sales for the day
-  const { data: salesData, error: salesError } = await supabase
-    .from("sales")
-    .select("id, amount, payment_method, customer_name")
-    .eq("shop_id", shopId)
-    .gte("created_at", start)
-    .lte("created_at", end);
+  // Execute all 5 queries concurrently
+  const [
+    salesResult,
+    expensesResult,
+    duesAddedResult,
+    duePaymentsResult,
+    pendingDuesResult,
+  ] = await Promise.all([
+    supabase
+      .from("sales")
+      .select("id, amount, payment_method, customer_name")
+      .eq("shop_id", shopId)
+      .gte("created_at", start)
+      .lte("created_at", end),
+    supabase
+      .from("expenses")
+      .select("id, amount")
+      .eq("shop_id", shopId)
+      .gte("created_at", start)
+      .lte("created_at", end),
+    supabase
+      .from("customer_dues")
+      .select("id, amount")
+      .eq("shop_id", shopId)
+      .gte("created_at", start)
+      .lte("created_at", end),
+    supabase
+      .from("due_payments")
+      .select("amount, due_id, customer_dues!inner(shop_id)")
+      .eq("customer_dues.shop_id", shopId)
+      .gte("payment_date", start)
+      .lte("payment_date", end),
+    supabase
+      .from("customer_dues")
+      .select("amount, paid_amount")
+      .eq("shop_id", shopId)
+      .eq("status", "pending"),
+  ]);
 
-  if (salesError) {
-    console.error("[Reports API] Sales query error:", {
-      code: salesError.code,
-      message: salesError.message,
-      details: (salesError as any).details,
-      hint: (salesError as any).hint,
-    });
-  }
+  // Handle errors
+  if (salesResult.error) console.error("[Reports API] Sales query error:", salesResult.error);
+  if (expensesResult.error) console.error("[Reports API] Expenses query error:", expensesResult.error);
+  if (duesAddedResult.error) console.error("[Reports API] Dues added query error:", duesAddedResult.error);
+  if (duePaymentsResult.error) console.error("[Reports API] Due payments query error:", duePaymentsResult.error);
+  if (pendingDuesResult.error) console.error("[Reports API] Pending dues query error:", pendingDuesResult.error);
 
-  const sales = salesData || [];
+  const sales = salesResult.data || [];
   const totalSales = sales.reduce((s, r) => s + (Number(r.amount) || 0), 0);
   const salesCount = sales.length;
   const averageSaleValue = salesCount > 0 ? totalSales / salesCount : 0;
@@ -83,79 +112,20 @@ export async function getDailyReport(
       .filter((n): n is string => Boolean(n))
   ).size;
 
-  // 2. Expenses for the day
-  const { data: expensesData, error: expensesError } = await supabase
-    .from("expenses")
-    .select("id, amount")
-    .eq("shop_id", shopId)
-    .gte("created_at", start)
-    .lte("created_at", end);
-
-  if (expensesError) {
-    console.error("[Reports API] Expenses query error:", {
-      code: expensesError.code,
-      message: expensesError.message,
-    });
-  }
-
-  const expenses = expensesData || [];
+  const expenses = expensesResult.data || [];
   const totalExpenses = expenses.reduce((s, r) => s + (Number(r.amount) || 0), 0);
   const expensesCount = expenses.length;
 
-  // 3. Due added today
-  const { data: duesAddedData, error: duesAddedError } = await supabase
-    .from("customer_dues")
-    .select("id, amount")
-    .eq("shop_id", shopId)
-    .gte("created_at", start)
-    .lte("created_at", end);
-
-  if (duesAddedError) {
-    console.error("[Reports API] Dues added query error:", {
-      code: duesAddedError.code,
-      message: duesAddedError.message,
-    });
-  }
-
-  const duesAdded = duesAddedData || [];
+  const duesAdded = duesAddedResult.data || [];
   const dueAdded = duesAdded.reduce((s, r) => s + (Number(r.amount) || 0), 0);
   const newDuesCount = duesAdded.length;
 
-  // 4. Due payments collected today
-  const { data: duePaymentsData, error: duePaymentsError } = await supabase
-    .from("due_payments")
-    .select("amount, due_id, customer_dues!inner(shop_id)")
-    .eq("customer_dues.shop_id", shopId)
-    .gte("payment_date", start)
-    .lte("payment_date", end);
-
-  if (duePaymentsError) {
-    console.error("[Reports API] Due payments query error:", {
-      code: duePaymentsError.code,
-      message: duePaymentsError.message,
-    });
-  }
-
-  const dueCollected = (duePaymentsData || []).reduce(
+  const dueCollected = (duePaymentsResult.data || []).reduce(
     (s, r) => s + (Number(r.amount) || 0),
     0
   );
 
-  // 5. Total pending due balance (all time for this shop)
-  const { data: pendingDuesData, error: pendingDuesError } = await supabase
-    .from("customer_dues")
-    .select("amount, paid_amount")
-    .eq("shop_id", shopId)
-    .eq("status", "pending");
-
-  if (pendingDuesError) {
-    console.error("[Reports API] Pending dues query error:", {
-      code: pendingDuesError.code,
-      message: pendingDuesError.message,
-    });
-  }
-
-  const pendingDueBalance = (pendingDuesData || []).reduce(
+  const pendingDueBalance = (pendingDuesResult.data || []).reduce(
     (s, r) => s + ((Number(r.amount) || 0) - (Number(r.paid_amount) || 0)),
     0
   );
