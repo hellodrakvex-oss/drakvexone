@@ -20,7 +20,7 @@ export function BottomNav({ basePath = "/dashboard" }: { basePath?: string }) {
   const pathname = usePathname();
 
   return (
-    <div className="fixed bottom-4 left-0 right-0 z-50 flex justify-center px-3 pb-safe pointer-events-none">
+    <div className="bottom-nav-root fixed bottom-4 left-0 right-0 z-50 flex justify-center px-3 pb-safe pointer-events-none">
       <nav
         className={cn(
           "flex items-center p-1.5 rounded-full glass-panel-heavy pointer-events-auto max-w-full",

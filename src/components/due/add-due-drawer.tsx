@@ -1,16 +1,8 @@
 "use client";
 
 import { useEffect, useRef, useState } from "react";
+import { AnimatePresence, motion } from "framer-motion";
 import { toast } from "sonner";
-import {
-  Drawer,
-  DrawerClose,
-  DrawerContent,
-  DrawerDescription,
-  DrawerFooter,
-  DrawerHeader,
-  DrawerTitle,
-} from "@/components/ui/drawer";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -32,8 +24,6 @@ import {
   ListChecks,
   Plus,
   ReceiptText,
-  Trash2,
-  X,
 } from "lucide-react";
 
 const QUICK_AMOUNTS = [250, 500, 1000, 1500, 2000];
@@ -81,6 +71,36 @@ export function AddDueDrawer() {
     ? Math.min(100, Math.round((paidAmount / editingDue.amount) * 100))
     : 0;
 
+  // Body scroll lock
+  useEffect(() => {
+    if (drawerOpen) {
+      document.body.style.overflow = "hidden";
+    } else {
+      document.body.style.overflow = "";
+    }
+    return () => {
+      document.body.style.overflow = "";
+    };
+  }, [drawerOpen]);
+
+  // ESC key to close
+  useEffect(() => {
+    if (!drawerOpen) return;
+    const handler = (e: KeyboardEvent) => {
+      if (e.key === "Escape") {
+        if (view === "record_payment") {
+          setView("ledger");
+        } else if (view === "ledger") {
+          setView("details");
+        } else {
+          closeDrawer();
+        }
+      }
+    };
+    window.addEventListener("keydown", handler);
+    return () => window.removeEventListener("keydown", handler);
+  }, [drawerOpen, view, closeDrawer]);
+
   // Reset on open / populate on edit
   useEffect(() => {
     if (drawerOpen) {
@@ -91,7 +111,7 @@ export function AddDueDrawer() {
         setDueDate(toDateInputValue(editingDue.dueDate));
         setPhone(editingDue.phone ?? "");
         setNotes(editingDue.notes ?? "");
-        const t = setTimeout(() => amountRef.current?.focus(), 120);
+        const t = setTimeout(() => amountRef.current?.focus(), 200);
         return () => clearTimeout(t);
       }
       setCustomerName("");
@@ -100,7 +120,7 @@ export function AddDueDrawer() {
       setPhone("");
       setPhoneError("");
       setNotes("");
-      const t = setTimeout(() => nameRef.current?.focus(), 120);
+      const t = setTimeout(() => nameRef.current?.focus(), 200);
       return () => clearTimeout(t);
     } else {
       setCustomerName("");
@@ -140,7 +160,7 @@ export function AddDueDrawer() {
       toast.error("Select due date");
       return;
     }
-    
+
     const cleanPhone = phone.replace(/\D/g, "");
     if (!cleanPhone || cleanPhone.length < 10) {
       setPhoneError("Valid 10-digit WhatsApp number is required");
@@ -203,9 +223,39 @@ export function AddDueDrawer() {
     });
   }
 
-  // ─── Ledger View ────────────────────────────────────────────────
+  // ─── Back navigation ──────────────────────────────────────────────
+  const handleBack = () => {
+    if (view === "record_payment") {
+      setView("ledger");
+    } else if (view === "ledger") {
+      setView("details");
+    } else {
+      closeDrawer();
+    }
+  };
+
+  // ─── Header title & subtitle ──────────────────────────────────────
+  const headerTitle =
+    view === "ledger"
+      ? `${editingDue?.customerName ?? ""} — Ledger`
+      : view === "record_payment"
+      ? "Record Payment"
+      : isEditing
+      ? "Edit Due"
+      : "Add Due";
+
+  const headerSubtitle =
+    view === "ledger"
+      ? "Full payment history & balance"
+      : view === "record_payment"
+      ? "Log a partial or full payment"
+      : isEditing
+      ? "Update customer due details"
+      : "Track credit in seconds";
+
+  // ─── Ledger View ─────────────────────────────────────────────────
   const LedgerView = () => (
-    <div className="px-5 py-4 space-y-4 overflow-y-auto max-h-[65vh]">
+    <div className="px-5 py-6 space-y-4">
       {/* Balance Summary */}
       <div className="grid grid-cols-3 gap-3">
         <div className="glass-panel rounded-xl p-3 space-y-0.5 text-center">
@@ -320,9 +370,9 @@ export function AddDueDrawer() {
     </div>
   );
 
-  // ─── Record Payment View ────────────────────────────────────────
+  // ─── Record Payment View ─────────────────────────────────────────
   const RecordPaymentView = () => (
-    <div className="px-5 py-4 space-y-4 overflow-y-auto">
+    <div className="px-5 py-6 space-y-4">
       <div className="glass-panel rounded-xl p-3 flex justify-between items-center">
         <span className="text-xs text-muted-foreground/70">Remaining Balance</span>
         <span className="text-base font-semibold tabular-nums text-orange-400">
@@ -398,254 +448,283 @@ export function AddDueDrawer() {
   );
 
   return (
-    <Drawer open={drawerOpen} onOpenChange={(open) => !open && closeDrawer()} modal>
-      <DrawerContent
-        className={cn(
-          "glass-panel-heavy border-t border-border/50 dark:border-white/15 max-h-[92vh] rounded-t-2xl pb-safe",
-          "[&>div:first-child]:bg-foreground/15 [&>div:first-child]:w-12"
-        )}
-      >
-        {/* ─── Header ──────────────────────────────────────────────── */}
-        <DrawerHeader className="text-left px-5 pt-2 pb-0">
-          <div className="flex items-center gap-2">
-            {view !== "details" && (
+    <AnimatePresence>
+      {drawerOpen && (
+        <motion.div
+          key="due-modal"
+          initial={{ opacity: 0 }}
+          animate={{ opacity: 1 }}
+          exit={{ opacity: 0 }}
+          transition={{ duration: 0.2, ease: "easeOut" }}
+          style={{
+            position: "fixed",
+            inset: 0,
+            width: "100vw",
+            height: "100vh",
+            zIndex: 50,
+            backdropFilter: "blur(20px)",
+            WebkitBackdropFilter: "blur(20px)",
+            background: "rgba(0,0,0,0.85)",
+          }}
+          onClick={(e) => {
+            if (e.target === e.currentTarget) closeDrawer();
+          }}
+        >
+          <motion.div
+            initial={{ opacity: 0, scale: 0.98 }}
+            animate={{ opacity: 1, scale: 1 }}
+            exit={{ opacity: 0, scale: 0.98 }}
+            transition={{ duration: 0.2, ease: "easeOut" }}
+            style={{
+              height: "100vh",
+              display: "flex",
+              flexDirection: "column",
+              maxWidth: "1400px",
+              margin: "0 auto",
+              width: "100%",
+            }}
+          >
+            {/* ─── Sticky Header ──────────────────────────────────────── */}
+            <div
+              style={{ position: "sticky", top: 0, zIndex: 50 }}
+              className="flex items-center gap-3 px-5 py-4 border-b border-white/10 bg-black/60 backdrop-blur-xl shrink-0"
+            >
               <button
                 type="button"
-                onClick={() => setView(view === "record_payment" ? "ledger" : "details")}
-                className="w-8 h-8 rounded-xl bg-muted/50 dark:bg-white/6 border border-border/50 dark:border-white/10 flex items-center justify-center shrink-0"
+                onClick={handleBack}
+                className="w-9 h-9 rounded-xl bg-white/8 border border-white/12 flex items-center justify-center shrink-0 hover:bg-white/12 transition-colors"
+                aria-label="Go back"
               >
-                <ArrowLeft className="w-4 h-4" />
+                <ArrowLeft className="w-4 h-4 text-foreground/80" />
               </button>
-            )}
-            <div className="flex-1 min-w-0">
-              <DrawerTitle className="text-lg font-semibold tracking-tight text-gradient">
-                {view === "ledger"
-                  ? `${editingDue?.customerName ?? ""} — Ledger`
-                  : view === "record_payment"
-                    ? "Record Payment"
-                    : isEditing
-                      ? "Edit Due"
-                      : "Add Due"}
-              </DrawerTitle>
-              <DrawerDescription className="saas-meta">
-                {view === "ledger"
-                  ? "Full payment history & balance"
-                  : view === "record_payment"
-                    ? "Log a partial or full payment"
-                    : isEditing
-                      ? "Update customer due details"
-                      : "Track credit in seconds"}
-              </DrawerDescription>
-            </div>
-            {/* Ledger shortcut when editing */}
-            {isEditing && view === "details" && (
-              <button
-                type="button"
-                onClick={() => setView("ledger")}
-                className="flex items-center gap-1.5 h-8 px-3 rounded-xl text-xs font-semibold bg-muted/50 dark:bg-white/6 border border-border/50 dark:border-white/10 text-muted-foreground/80 hover:text-foreground/90 transition-colors"
-              >
-                <ListChecks className="w-3.5 h-3.5" />
-                Ledger
-                <ChevronRight className="w-3 h-3 opacity-50" />
-              </button>
-            )}
-          </div>
-        </DrawerHeader>
-
-        {/* ─── Content ─────────────────────────────────────────────── */}
-        {view === "ledger" ? (
-          <LedgerView />
-        ) : view === "record_payment" ? (
-          <RecordPaymentView />
-        ) : (
-          // ─── Details / Edit Form ──────────────────────────────────
-          <div className="px-5 py-4 space-y-4 overflow-y-auto">
-            <div className="space-y-2">
-              <Label htmlFor="due-name" className="saas-label">
-                Customer name
-              </Label>
-              <Input
-                ref={nameRef}
-                id="due-name"
-                placeholder="e.g. Ramesh Anna"
-                value={customerName}
-                onChange={(e) => setCustomerName(e.target.value)}
-                className="h-12 rounded-xl bg-muted/50 dark:bg-white/5 border-border/50 dark:border-white/15 text-base"
-              />
-            </div>
-
-            <div className="space-y-2">
-              <Label htmlFor="due-amount" className="saas-label">
-                {isEditing ? "Original Amount (₹)" : "Amount (₹)"}
-              </Label>
-              <div className="relative">
-                <span className="absolute left-4 top-1/2 -translate-y-1/2 text-xl font-semibold text-orange-400/90">
-                  ₹
-                </span>
-                <Input
-                  ref={amountRef}
-                  id="due-amount"
-                  type="text"
-                  inputMode="decimal"
-                  pattern="[0-9]*"
-                  placeholder="0"
-                  value={amount}
-                  onChange={(e) => setAmount(e.target.value.replace(/[^0-9.]/g, ""))}
-                  className="h-14 pl-11 pr-4 text-2xl font-semibold tabular-nums rounded-2xl bg-muted/50 dark:bg-white/5 border-border/50 dark:border-white/15"
-                />
+              <div className="flex-1 min-w-0">
+                <h2 className="text-lg font-semibold tracking-tight text-gradient leading-tight">
+                  {headerTitle}
+                </h2>
+                <p className="text-xs text-muted-foreground/60 mt-0.5">
+                  {headerSubtitle}
+                </p>
               </div>
-              <div className="flex flex-wrap gap-2">
-                {QUICK_AMOUNTS.map((n) => (
-                  <button
-                    key={n}
-                    type="button"
-                    onClick={() => setAmount(String(n))}
+              {/* Ledger shortcut when editing and in details view */}
+              {isEditing && view === "details" && (
+                <button
+                  type="button"
+                  onClick={() => setView("ledger")}
+                  className="flex items-center gap-1.5 h-8 px-3 rounded-xl text-xs font-semibold bg-muted/50 dark:bg-white/6 border border-border/50 dark:border-white/10 text-muted-foreground/80 hover:text-foreground/90 transition-colors"
+                >
+                  <ListChecks className="w-3.5 h-3.5" />
+                  Ledger
+                  <ChevronRight className="w-3 h-3 opacity-50" />
+                </button>
+              )}
+            </div>
+
+            {/* ─── Scrollable Content ───────────────────────────────────── */}
+            <div
+              className="flex-1 overflow-y-auto"
+              style={{ scrollbarWidth: "none", msOverflowStyle: "none" }}
+            >
+              {view === "ledger" ? (
+                <LedgerView />
+              ) : view === "record_payment" ? (
+                <RecordPaymentView />
+              ) : (
+                // ─── Details / Add Form ────────────────────────────────────
+                <div className="px-5 py-6 space-y-5">
+                  <div className="space-y-2">
+                    <Label htmlFor="due-name" className="saas-label">
+                      Customer name
+                    </Label>
+                    <Input
+                      ref={nameRef}
+                      id="due-name"
+                      placeholder="e.g. Ramesh Anna"
+                      value={customerName}
+                      onChange={(e) => setCustomerName(e.target.value)}
+                      className="h-12 rounded-xl bg-muted/50 dark:bg-white/5 border-border/50 dark:border-white/15 text-base"
+                    />
+                  </div>
+
+                  <div className="space-y-2">
+                    <Label htmlFor="due-amount" className="saas-label">
+                      {isEditing ? "Original Amount (₹)" : "Amount (₹)"}
+                    </Label>
+                    <div className="relative">
+                      <span className="absolute left-4 top-1/2 -translate-y-1/2 text-xl font-semibold text-orange-400/90">
+                        ₹
+                      </span>
+                      <Input
+                        ref={amountRef}
+                        id="due-amount"
+                        type="text"
+                        inputMode="decimal"
+                        pattern="[0-9]*"
+                        placeholder="0"
+                        value={amount}
+                        onChange={(e) => setAmount(e.target.value.replace(/[^0-9.]/g, ""))}
+                        className="h-14 pl-11 pr-4 text-2xl font-semibold tabular-nums rounded-2xl bg-muted/50 dark:bg-white/5 border-border/50 dark:border-white/15"
+                      />
+                    </div>
+                    <div className="flex flex-wrap gap-2">
+                      {QUICK_AMOUNTS.map((n) => (
+                        <button
+                          key={n}
+                          type="button"
+                          onClick={() => setAmount(String(n))}
+                          className={cn(
+                            "min-h-12 px-3 rounded-xl text-xs font-semibold tabular-nums",
+                            amount === String(n)
+                              ? "bg-orange-500/25 text-orange-600 dark:text-orange-300 border border-orange-500/35"
+                              : "bg-muted/50 dark:bg-white/6 border border-border/50 dark:border-white/10 text-foreground/85 hover:bg-muted dark:hover:bg-white/10"
+                          )}
+                        >
+                          ₹{n.toLocaleString("en-IN")}
+                        </button>
+                      ))}
+                    </div>
+                  </div>
+
+                  <div className="space-y-2">
+                    <Label htmlFor="due-date" className="saas-label">
+                      Due date
+                    </Label>
+                    <Input
+                      id="due-date"
+                      type="date"
+                      value={dueDate}
+                      onChange={(e) => setDueDate(e.target.value)}
+                      className="h-12 rounded-xl bg-muted/50 dark:bg-white/5 border-border/50 dark:border-white/15 text-base [color-scheme:light] dark:[color-scheme:dark]"
+                    />
+                  </div>
+
+                  <div className="space-y-2">
+                    <Label htmlFor="due-phone" className="saas-label">
+                      Customer WhatsApp number <span className="text-rose-500">*</span>
+                    </Label>
+                    <Input
+                      id="due-phone"
+                      type="tel"
+                      inputMode="tel"
+                      placeholder="98XXXXXXXX"
+                      value={phone}
+                      onChange={(e) => {
+                        setPhone(e.target.value.replace(/[^\d+\s]/g, ""));
+                        if (phoneError) setPhoneError("");
+                      }}
+                      className={cn(
+                        "h-12 rounded-xl bg-muted/50 dark:bg-white/5 border-border/50 dark:border-white/15 text-base",
+                        phoneError && "border-rose-500/50 focus-visible:ring-rose-500/50"
+                      )}
+                    />
+                    {phoneError && <p className="text-xs text-rose-500">{phoneError}</p>}
+                  </div>
+
+                  <div className="space-y-2">
+                    <Label htmlFor="due-notes" className="saas-label">
+                      Notes (optional)
+                    </Label>
+                    <Input
+                      id="due-notes"
+                      placeholder="Monthly supply, table credit..."
+                      value={notes}
+                      onChange={(e) => setNotes(e.target.value)}
+                      className="h-11 rounded-xl bg-muted/50 dark:bg-white/5 border-border/50 dark:border-white/15"
+                    />
+                  </div>
+
+                  {/* Bottom padding */}
+                  <div className="h-4" />
+                </div>
+              )}
+            </div>
+
+            {/* ─── Sticky Footer ───────────────────────────────────────── */}
+            <div
+              style={{ position: "sticky", bottom: 0, zIndex: 50 }}
+              className="px-5 py-4 border-t border-white/10 bg-black/60 backdrop-blur-xl shrink-0"
+            >
+              {view === "ledger" && editingDue?.status === "pending" && (
+                <div className="flex gap-2">
+                  <Button
+                    size="lg"
+                    onClick={() => setView("record_payment")}
+                    className="flex-1 h-12 rounded-xl text-base font-semibold bg-gradient-to-r from-emerald-600 to-teal-500 border border-emerald-500/30 text-white shadow-[0_0_20px_rgb(16,185,129/0.25)]"
+                  >
+                    <Plus className="w-4 h-4 mr-1.5" />
+                    Record Payment
+                  </Button>
+                  <Button
+                    size="lg"
+                    onClick={handleFullSettle}
+                    className="h-12 px-4 rounded-xl text-base font-semibold bg-muted/60 dark:bg-white/8 border border-border/50 dark:border-white/12 text-foreground/80"
+                  >
+                    <Check className="w-4 h-4 mr-1" />
+                    Settle All
+                  </Button>
+                </div>
+              )}
+
+              {view === "record_payment" && (
+                <div className="flex gap-2">
+                  <Button
+                    variant="outline"
+                    size="lg"
+                    onClick={() => setView("ledger")}
+                    className="flex-1 h-12 rounded-xl border-border/50 dark:border-white/15 bg-muted/50 dark:bg-white/5 text-base"
+                  >
+                    Cancel
+                  </Button>
+                  <Button
+                    size="lg"
+                    onClick={handleRecordPayment}
+                    disabled={isRecording}
+                    className="flex-[1.4] h-12 rounded-xl text-base font-semibold bg-gradient-to-r from-emerald-600 to-teal-500 text-white shadow-[0_0_20px_rgb(16,185,129/0.25)]"
+                  >
+                    {isRecording ? "Saving..." : "Save Payment"}
+                  </Button>
+                </div>
+              )}
+
+              {view === "details" && (
+                <div className="flex gap-3">
+                  <Button
+                    variant="outline"
+                    size="lg"
+                    onClick={closeDrawer}
+                    className="flex-1 h-12 rounded-xl border-border/50 dark:border-white/15 bg-muted/50 dark:bg-white/5 text-base"
+                  >
+                    Cancel
+                  </Button>
+                  <Button
+                    size="lg"
+                    onClick={handleSave}
+                    disabled={isSaving}
                     className={cn(
-                      "min-h-12 px-3 rounded-xl text-xs font-semibold tabular-nums",
-                      amount === String(n)
-                        ? "bg-orange-500/25 text-orange-600 dark:text-orange-300 border border-orange-500/35"
-                        : "bg-muted/50 dark:bg-white/6 border border-border/50 dark:border-white/10 text-foreground/85 hover:bg-muted dark:hover:bg-white/10"
+                      "flex-[1.4] h-12 rounded-xl text-base font-semibold",
+                      isSaving ? "opacity-50 cursor-not-allowed" : "",
+                      "bg-gradient-to-r from-orange-500 via-amber-500 to-orange-600",
+                      "shadow-[0_0_28px_rgb(251,146,60/0.35)] border border-border/50 dark:border-white/20 text-white"
                     )}
                   >
-                    ₹{n.toLocaleString("en-IN")}
-                  </button>
-                ))}
-              </div>
-            </div>
+                    {isSaving ? "Saving..." : isEditing ? "Update Due" : "Save Due"}
+                  </Button>
+                </div>
+              )}
 
-            <div className="space-y-2">
-              <Label htmlFor="due-date" className="saas-label">
-                Due date
-              </Label>
-              <Input
-                id="due-date"
-                type="date"
-                value={dueDate}
-                onChange={(e) => setDueDate(e.target.value)}
-                className="h-12 rounded-xl bg-muted/50 dark:bg-white/5 border-border/50 dark:border-white/15 text-base [color-scheme:light] dark:[color-scheme:dark]"
-              />
-            </div>
-
-            <div className="space-y-2">
-              <Label htmlFor="due-phone" className="saas-label">
-                Customer WhatsApp number <span className="text-rose-500">*</span>
-              </Label>
-              <Input
-                id="due-phone"
-                type="tel"
-                inputMode="tel"
-                placeholder="98XXXXXXXX"
-                value={phone}
-                onChange={(e) => {
-                  setPhone(e.target.value.replace(/[^\d+\s]/g, ""));
-                  if (phoneError) setPhoneError("");
-                }}
-                className={cn(
-                  "h-12 rounded-xl bg-muted/50 dark:bg-white/5 border-border/50 dark:border-white/15 text-base",
-                  phoneError && "border-rose-500/50 focus-visible:ring-rose-500/50"
-                )}
-              />
-              {phoneError && <p className="text-xs text-rose-500">{phoneError}</p>}
-            </div>
-
-            <div className="space-y-2">
-              <Label htmlFor="due-notes" className="saas-label">
-                Notes (optional)
-              </Label>
-              <Input
-                id="due-notes"
-                placeholder="Monthly supply, table credit..."
-                value={notes}
-                onChange={(e) => setNotes(e.target.value)}
-                className="h-11 rounded-xl bg-muted/50 dark:bg-white/5 border-border/50 dark:border-white/15"
-              />
-            </div>
-          </div>
-        )}
-
-        {/* ─── Footer ──────────────────────────────────────────────── */}
-        <DrawerFooter className="px-5 pb-6 pt-2 flex-col gap-2">
-          {view === "ledger" && editingDue?.status === "pending" && (
-            <div className="flex gap-2">
-              <Button
-                size="lg"
-                onClick={() => setView("record_payment")}
-                className="flex-1 h-12 rounded-xl text-base font-semibold bg-gradient-to-r from-emerald-600 to-teal-500 border border-emerald-500/30 text-white shadow-[0_0_20px_rgb(16,185,129/0.25)]"
-              >
-                <Plus className="w-4 h-4 mr-1.5" />
-                Record Payment
-              </Button>
-              <Button
-                size="lg"
-                onClick={handleFullSettle}
-                className="h-12 px-4 rounded-xl text-base font-semibold bg-muted/60 dark:bg-white/8 border border-border/50 dark:border-white/12 text-foreground/80"
-              >
-                <Check className="w-4 h-4 mr-1" />
-                Settle All
-              </Button>
-            </div>
-          )}
-
-          {view === "record_payment" && (
-            <div className="flex gap-2">
-              <Button
-                variant="outline"
-                size="lg"
-                onClick={() => setView("ledger")}
-                className="flex-1 h-12 rounded-xl border-border/50 dark:border-white/15 bg-muted/50 dark:bg-white/5 text-base"
-              >
-                Cancel
-              </Button>
-              <Button
-                size="lg"
-                onClick={handleRecordPayment}
-                disabled={isRecording}
-                className="flex-[1.4] h-12 rounded-xl text-base font-semibold bg-gradient-to-r from-emerald-600 to-teal-500 text-white shadow-[0_0_20px_rgb(16,185,129/0.25)]"
-              >
-                {isRecording ? "Saving..." : "Save Payment"}
-              </Button>
-            </div>
-          )}
-
-          {view === "details" && (
-            <div className="flex gap-3">
-              <DrawerClose asChild>
+              {view === "ledger" && editingDue?.status === "paid" && (
                 <Button
                   variant="outline"
                   size="lg"
-                  className="flex-1 h-12 rounded-xl border-border/50 dark:border-white/15 bg-muted/50 dark:bg-white/5 text-base"
+                  onClick={closeDrawer}
+                  className="w-full h-12 rounded-xl border-border/50 dark:border-white/15 bg-muted/50 dark:bg-white/5 text-base"
                 >
-                  Cancel
+                  Close
                 </Button>
-              </DrawerClose>
-              <Button
-                size="lg"
-                onClick={handleSave}
-                disabled={isSaving}
-                className={cn(
-                  "flex-[1.4] h-12 rounded-xl text-base font-semibold",
-                  "bg-gradient-to-r from-orange-500 via-amber-500 to-orange-600",
-                  "shadow-[0_0_28px_rgb(251,146,60/0.35)] border border-border/50 dark:border-white/20 text-white"
-                )}
-              >
-                {isSaving ? "Saving..." : isEditing ? "Update Due" : "Save Due"}
-              </Button>
+              )}
             </div>
-          )}
-
-          {view === "ledger" && editingDue?.status === "paid" && (
-            <DrawerClose asChild>
-              <Button
-                variant="outline"
-                size="lg"
-                className="w-full h-12 rounded-xl border-border/50 dark:border-white/15 bg-muted/50 dark:bg-white/5 text-base"
-              >
-                Close
-              </Button>
-            </DrawerClose>
-          )}
-        </DrawerFooter>
-      </DrawerContent>
-    </Drawer>
+          </motion.div>
+        </motion.div>
+      )}
+    </AnimatePresence>
   );
 }

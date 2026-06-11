@@ -494,3 +494,9 @@
     display: none;
   }
 }
+
+/* Hide bottom navigation while any settings modal is open */
+body.modal-open .bottom-nav-root {
+  display: none !important;
+}
+
