@@ -42,6 +42,7 @@ import { cn } from "@/lib/utils";
 import { ChangePasswordModal } from "@/components/settings/change-password-modal";
 import { ResetDataModal, DeleteAccountModal } from "@/components/settings/danger-zone-modals";
 import { supabase } from "@/lib/supabase/client";
+import Image from "next/image";
 
 const BUSINESS_TYPES = [
   { value: "tea_shop", label: "Tea Shop" },
@@ -212,13 +213,31 @@ export default function SettingsPage() {
 
       <div className="page-content space-y-5 max-w-2xl mx-auto">
         {/* Brand Header */}
-        <motion.div variants={itemVariants} className="flex flex-col items-center justify-center mb-8 mt-2">
-          <DrakvexLogo size={56} variant="standard" />
-          <h2 className="text-xl font-black tracking-tight mt-3">
-            DRAKVEX <span className="text-transparent bg-clip-text bg-gradient-to-r from-primary to-blue-400">ONE</span>
-          </h2>
-          <p className="text-muted-foreground text-xs font-medium mt-1">Manage your shop & preferences</p>
-        </motion.div>
+       <motion.div
+  variants={itemVariants}
+  className="flex flex-col items-center justify-center mb-8 mt-2"
+>
+  <div className="relative w-20 h-20 drop-shadow-[0_0_25px_rgba(59,130,246,0.45)]">
+    <Image
+      src="/drakvexonebg logo.png"
+      alt="Drakvex One"
+      fill
+      priority
+      className="object-contain"
+    />
+  </div>
+
+  <h2 className="text-xl font-black tracking-tight mt-4">
+    DRAKVEX{" "}
+    <span className="text-transparent bg-clip-text bg-gradient-to-r from-primary to-blue-400">
+      ONE
+    </span>
+  </h2>
+
+  <p className="text-muted-foreground text-xs font-medium mt-1">
+    Manage your shop & preferences
+  </p>
+</motion.div>
 
         {/* 1. Profile */}
         <motion.section variants={itemVariants} className="premium-card p-5 space-y-5">

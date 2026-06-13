@@ -60,61 +60,79 @@ export async function fetchDashboardData(userId: string): Promise<DashboardMetri
   const today = todayStart();
   const weekAgo = daysAgoStart(6); // Last 7 days including today
 
-  // 1. Fetch shop name from shops table (single source of truth)
-  const { data: shop } = await supabase
-    .from('shops')
-    .select('shop_name')
-    .eq('user_id', userId)
-    .order('created_at', { ascending: true })
-    .limit(1)
-    .maybeSingle();
+  // Execute all queries in parallel
+  const [
+    shopResult,
+    todaySalesResult,
+    todayExpensesResult,
+    pendingDuesResult,
+    weeklySalesResult,
+    recentExpensesResult
+  ] = await Promise.all([
+    // 1. Fetch shop name
+    supabase
+      .from('shops')
+      .select('shop_name')
+      .eq('user_id', userId)
+      .order('created_at', { ascending: true })
+      .limit(1)
+      .maybeSingle(),
+      
+    // 2. Fetch today's sales
+    supabase
+      .from('sales')
+      .select('amount')
+      .eq('user_id', userId)
+      .gte('created_at', today),
+      
+    // 3. Fetch today's expenses
+    supabase
+      .from('expenses')
+      .select('amount')
+      .eq('user_id', userId)
+      .gte('created_at', today),
+      
+    // 4. Fetch pending customer dues
+    supabase
+      .from('customer_dues')
+      .select('id, customer_name, amount, paid_amount, due_date, created_at')
+      .eq('user_id', userId)
+      .eq('status', 'pending')
+      .order('due_date', { ascending: true }),
+      
+    // 5. Fetch weekly sales
+    supabase
+      .from('sales')
+      .select('amount, created_at')
+      .eq('user_id', userId)
+      .gte('created_at', weekAgo),
+      
+    // 6. Fetch recent expenses
+    supabase
+      .from('expenses')
+      .select('id, category, description, amount, created_at')
+      .eq('user_id', userId)
+      .order('created_at', { ascending: false })
+      .limit(3)
+  ]);
 
-  const shopName = shop?.shop_name || 'Your Shop';
+  const shopName = shopResult.data?.shop_name || 'Your Shop';
 
-  // 2. Fetch today's sales
-  const { data: todaySalesData } = await supabase
-    .from('sales')
-    .select('amount')
-    .eq('user_id', userId)
-    .gte('created_at', today);
-
-  const todaySales = (todaySalesData || []).reduce(
+  const todaySales = (todaySalesResult.data || []).reduce(
     (sum, row) => sum + (Number(row.amount) || 0),
     0
   );
 
-  // 3. Fetch today's expenses
-  const { data: todayExpensesData } = await supabase
-    .from('expenses')
-    .select('amount')
-    .eq('user_id', userId)
-    .gte('created_at', today);
-
-  const todayExpenses = (todayExpensesData || []).reduce(
+  const todayExpenses = (todayExpensesResult.data || []).reduce(
     (sum, row) => sum + (Number(row.amount) || 0),
     0
   );
 
-  // 4. Fetch pending customer dues total
-  const { data: pendingDuesData } = await supabase
-    .from('customer_dues')
-    .select('id, customer_name, amount, paid_amount, due_date, created_at')
-    .eq('user_id', userId)
-    .eq('status', 'pending')
-    .order('due_date', { ascending: true });
-
-  const pendingDues = pendingDuesData || [];
+  const pendingDues = pendingDuesResult.data || [];
   const toCollect = pendingDues.reduce(
     (sum, row) => sum + ((Number(row.amount) || 0) - (Number(row.paid_amount) || 0)),
     0
   );
-
-  // 5. Fetch last 7 days of sales for chart
-  const { data: weeklySalesData } = await supabase
-    .from('sales')
-    .select('amount, created_at')
-    .eq('user_id', userId)
-    .gte('created_at', weekAgo);
 
   // Group by day of week
   const dayTotals = new Map<number, number>();
@@ -124,7 +142,7 @@ export async function fetchDashboardData(userId: string): Promise<DashboardMetri
     dayTotals.set(d.getDay(), 0);
   }
 
-  for (const row of weeklySalesData || []) {
+  for (const row of weeklySalesResult.data || []) {
     const dayIndex = new Date(row.created_at).getDay();
     dayTotals.set(dayIndex, (dayTotals.get(dayIndex) || 0) + (Number(row.amount) || 0));
   }
@@ -141,14 +159,6 @@ export async function fetchDashboardData(userId: string): Promise<DashboardMetri
     });
   }
 
-  // 6. Fetch 3 most recent expenses
-  const { data: recentExpensesData } = await supabase
-    .from('expenses')
-    .select('id, category, description, amount, created_at')
-    .eq('user_id', userId)
-    .order('created_at', { ascending: false })
-    .limit(3);
-
   // 7. Calculate profit
   const profit = todaySales - todayExpenses;
 
@@ -160,7 +170,7 @@ export async function fetchDashboardData(userId: string): Promise<DashboardMetri
     toCollect,
     pendingDuesCount: pendingDues.length,
     weeklySales,
-    recentExpenses: recentExpensesData || [],
+    recentExpenses: recentExpensesResult.data || [],
     pendingDues: pendingDues.slice(0, 3),
   };
 }

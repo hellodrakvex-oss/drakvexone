@@ -1,15 +1,31 @@
 "use client";
 
-import { useState, useMemo } from "react";
+import { useState, useMemo, useEffect } from "react";
 import Link from "next/link";
+import { useRouter, usePathname, useSearchParams } from "next/navigation";
 import { Search, Users, AlertTriangle } from "lucide-react";
 import type { CustomerSummary } from "@/lib/customers/types";
 
 type FilterType = "All" | "Trusted" | "Regular" | "Risk";
 
-export function CustomerListClient({ customers }: { customers: CustomerSummary[] }) {
-  const [search, setSearch] = useState("");
+export function CustomerListClient({ customers, defaultSearch = "" }: { customers: CustomerSummary[], defaultSearch?: string }) {
+  const [search, setSearch] = useState(defaultSearch);
   const [filter, setFilter] = useState<FilterType>("All");
+  const router = useRouter();
+  const pathname = usePathname();
+
+  // Debounce search update
+  useEffect(() => {
+    if (search === defaultSearch) return;
+
+    const timeoutId = setTimeout(() => {
+      const params = new URLSearchParams();
+      if (search) params.set("q", search);
+      router.replace(`${pathname}?${params.toString()}`);
+    }, 400); // 400ms debounce
+
+    return () => clearTimeout(timeoutId);
+  }, [search, pathname, router, defaultSearch]);
 
   const phoneCounts = useMemo(() => {
     const counts = new Map<string, number>();
@@ -25,19 +41,11 @@ export function CustomerListClient({ customers }: { customers: CustomerSummary[]
     return customers.filter((c) => {
       // 1. Filter by Segment
       if (filter !== "All" && c.segment !== filter) return false;
-
-      // 2. Filter by Search
-      if (search.trim() !== "") {
-        const q = search.toLowerCase();
-        const matchName = c.customerName.toLowerCase().includes(q);
-        const matchPhone = c.phone ? c.phone.toLowerCase().includes(q) : false;
-        if (!matchName && !matchPhone) return false;
-      }
       return true;
     });
-  }, [customers, search, filter]);
+  }, [customers, filter]);
 
-  if (customers.length === 0) {
+  if (customers.length === 0 && !search) {
     return (
       <div className="flex flex-col items-center justify-center py-20 text-center px-4">
         <div className="w-16 h-16 rounded-full bg-muted/50 flex items-center justify-center mb-4">

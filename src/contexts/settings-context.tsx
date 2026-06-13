@@ -32,13 +32,15 @@ type SettingsContextValue = {
 
 export const SettingsContext = createContext<SettingsContextValue | null>(null);
 
+let globalSettingsCache: AppSettings | null = null;
+
 export function SettingsProvider({ children }: { children: ReactNode }) {
   const { user } = useAuth();
-  const [settings, setSettings] = useState<AppSettings>(DEFAULT_SETTINGS);
-  const [isHydrated, setIsHydrated] = useState(false);
+  const [settings, setSettings] = useState<AppSettings>(globalSettingsCache || DEFAULT_SETTINGS);
+  const [isHydrated, setIsHydrated] = useState(!!globalSettingsCache);
   const [hasUnsavedChanges, setHasUnsavedChanges] = useState(false);
   const [isSaving, setIsSaving] = useState(false);
-  const [originalSettings, setOriginalSettings] = useState<AppSettings>(DEFAULT_SETTINGS);
+  const [originalSettings, setOriginalSettings] = useState<AppSettings>(globalSettingsCache || DEFAULT_SETTINGS);
 
   // Load settings from Supabase on mount
   useEffect(() => {
@@ -49,11 +51,17 @@ export function SettingsProvider({ children }: { children: ReactNode }) {
       }
 
       try {
+        if (globalSettingsCache) {
+          setSettings(globalSettingsCache);
+          setOriginalSettings(globalSettingsCache);
+          setIsHydrated(true);
+        }
+
         const fetched = await fetchSettingsFromSupabase(user.id);
         if (fetched) {
+          globalSettingsCache = fetched;
           setSettings(fetched);
           setOriginalSettings(fetched);
-// console.log("[SettingsContext] Loaded from Supabase:", fetched);
         }
       } catch (error) {
         console.error("[SettingsContext] Error loading settings:", error);
@@ -105,6 +113,7 @@ export function SettingsProvider({ children }: { children: ReactNode }) {
     try {
       const result = await saveSettingsToSupabase(user.id, settings);
       if (result.success) {
+        globalSettingsCache = settings;
         setOriginalSettings(settings);
         setHasUnsavedChanges(false);
       }

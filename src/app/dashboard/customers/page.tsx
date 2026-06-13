@@ -8,7 +8,7 @@ import { redirect } from "next/navigation";
 import Link from "next/link";
 import { CustomerListClient } from "./customer-list-client";
 
-async function CustomersList() {
+async function CustomersList({ query }: { query?: string }) {
   const cookieStore = await cookies();
   const supabase = createServerClient(
     process.env.NEXT_PUBLIC_SUPABASE_URL!,
@@ -47,12 +47,15 @@ async function CustomersList() {
     redirect("/setup");
   }
 
-  const customers = await getCustomers(shop.id);
+  const customers = await getCustomers(shop.id, query);
 
-  return <CustomerListClient customers={customers} />;
+  return <CustomerListClient customers={customers} defaultSearch={query} />;
 }
 
-export default function CustomersPage() {
+export default async function CustomersPage({ searchParams }: { searchParams: Promise<{ q?: string }> }) {
+  const resolvedParams = await searchParams;
+  const q = resolvedParams.q;
+
   return (
     <AnimatedPage className="min-h-screen bg-background">
       <div className="px-5 pt-12 pb-6">
@@ -61,8 +64,8 @@ export default function CustomersPage() {
       </div>
 
       <div className="px-5">
-        <Suspense fallback={<div className="animate-pulse h-32 bg-muted/50 rounded-2xl"></div>}>
-          <CustomersList />
+        <Suspense fallback={<div className="animate-pulse h-32 bg-muted/50 rounded-2xl"></div>} key={q}>
+          <CustomersList query={q} />
         </Suspense>
       </div>
     </AnimatedPage>

@@ -13,14 +13,26 @@ import { SettingsProvider } from "@/contexts/settings-context";
 import { QuickAddProvider } from "@/contexts/quick-add-context";
 import { NotificationsProvider } from "@/contexts/notifications-context";
 import { useAuth } from "@/contexts/auth-context";
-import { NotificationDrawer } from "@/components/notifications/notification-drawer";
 import * as authFns from "@/lib/supabase/auth";
+import dynamic from "next/dynamic";
+import { useRouter } from "next/navigation";
+
+const NotificationDrawer = dynamic(() => import("@/components/notifications/notification-drawer").then(mod => mod.NotificationDrawer), { ssr: false });
 
 function DashboardInitializer({ children }: { children: React.ReactNode }) {
   const { user } = useAuth();
+  const router = useRouter();
 
   // Verify user setup on dashboard load
   useEffect(() => {
+    // Prefetch core routes in the background
+    router.prefetch('/dashboard');
+    router.prefetch('/dashboard/sales');
+    router.prefetch('/dashboard/expenses');
+    router.prefetch('/dashboard/due');
+    router.prefetch('/dashboard/customers');
+    router.prefetch('/dashboard/settings');
+    router.prefetch('/dashboard/reports');
     if (user?.id) {
 // console.log(`[Dashboard] Verifying setup for user: ${user.id}`);
       authFns.ensureUserSetup(user.id).catch((error) => {
@@ -34,7 +46,8 @@ function DashboardInitializer({ children }: { children: React.ReactNode }) {
 }
 
 import { SearchProvider } from "@/contexts/search-context";
-import { GlobalSearchScreen } from "@/components/search/global-search-screen";
+
+const GlobalSearchScreen = dynamic(() => import("@/components/search/global-search-screen").then(mod => mod.GlobalSearchScreen), { ssr: false });
 
 export function DashboardProviders({ children }: { children: React.ReactNode }) {
   return (

@@ -1,5 +1,6 @@
 "use client";
 
+import { memo, useMemo } from "react";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { LayoutDashboard, TrendingDown, Receipt, Settings, Users, FileBarChart, Contact } from "lucide-react";
@@ -7,8 +8,8 @@ import { cn } from "@/lib/utils";
 import { motion } from "framer-motion";
 import { springs } from "@/lib/motion";
 
-export function BottomNav({ basePath = "/dashboard" }: { basePath?: string }) {
-  const NAV_ITEMS = [
+export const BottomNav = memo(function BottomNav({ basePath = "/dashboard" }: { basePath?: string }) {
+  const NAV_ITEMS = useMemo(() => [
     { name: "Home", href: basePath, icon: LayoutDashboard },
     { name: "Sales", href: `${basePath}/sales`, icon: Receipt },
     { name: "Expenses", href: `${basePath}/expenses`, icon: TrendingDown },
@@ -16,7 +17,7 @@ export function BottomNav({ basePath = "/dashboard" }: { basePath?: string }) {
     { name: "Customers", href: `${basePath}/customers`, icon: Contact },
     { name: "Reports", href: `${basePath}/reports`, icon: FileBarChart },
     { name: "More", href: `${basePath}/settings`, icon: Settings },
-  ];
+  ], [basePath]);
   const pathname = usePathname();
 
   return (
@@ -70,4 +71,4 @@ export function BottomNav({ basePath = "/dashboard" }: { basePath?: string }) {
       </nav>
     </div>
   );
-}
+});

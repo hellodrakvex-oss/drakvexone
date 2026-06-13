@@ -38,14 +38,21 @@ function calculateSegment(
   return "Regular";
 }
 
-export async function getCustomers(shopId: string): Promise<CustomerSummary[]> {
+export async function getCustomers(shopId: string, query?: string): Promise<CustomerSummary[]> {
   const supabase = await getServerSupabase();
 
-  const { data, error } = await supabase
+  let req = supabase
     .from("customer_summary_view")
-    .select("*")
+    .select("id, shop_id, customer_name, phone, total_sales, total_paid, total_due, transaction_count, last_activity, customer_since, last_purchase_date, last_due_date")
     .eq("shop_id", shopId)
-    .order("last_activity", { ascending: false });
+    .order("last_activity", { ascending: false })
+    .limit(50);
+
+  if (query && query.trim() !== '') {
+    req = req.or(`customer_name.ilike.%${query}%,phone.ilike.%${query}%`);
+  }
+
+  const { data, error } = await req;
 
   if (error) {
     console.error("[Customers API] Failed to fetch customers:", {

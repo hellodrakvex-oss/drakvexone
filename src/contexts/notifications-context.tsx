@@ -56,45 +56,67 @@ export function NotificationsProvider({ children }: { children: ReactNode }) {
   }, [user?.id]);
 
   useEffect(() => {
-    loadNotifications();
+    let channel: ReturnType<typeof supabase.channel> | null = null;
+    let isActive = true;
 
-    if (!user?.id) return;
+    const runLoad = () => {
+      if (!isActive) return;
+      loadNotifications();
 
-    // Set up realtime subscription
-    const channel = supabase
-      .channel(`notifications_${user.id}`)
-      .on(
-        "postgres_changes",
-        {
-          event: "INSERT",
-          schema: "public",
-          table: "notifications",
-          filter: `user_id=eq.${user.id}`,
-        },
-        (payload) => {
-          const newNotification = payload.new as Notification;
-          setNotifications((prev) => [newNotification, ...prev]);
-        }
-      )
-      .on(
-        "postgres_changes",
-        {
-          event: "UPDATE",
-          schema: "public",
-          table: "notifications",
-          filter: `user_id=eq.${user.id}`,
-        },
-        (payload) => {
-          const updatedNotification = payload.new as Notification;
-          setNotifications((prev) =>
-            prev.map((n) => (n.id === updatedNotification.id ? updatedNotification : n))
-          );
-        }
-      )
-      .subscribe();
+      if (!user?.id) return;
+
+      // Set up realtime subscription
+      channel = supabase
+        .channel(`notifications_${user.id}`)
+        .on(
+          "postgres_changes",
+          {
+            event: "INSERT",
+            schema: "public",
+            table: "notifications",
+            filter: `user_id=eq.${user.id}`,
+          },
+          (payload) => {
+            const newNotification = payload.new as Notification;
+            setNotifications((prev) => [newNotification, ...prev]);
+          }
+        )
+        .on(
+          "postgres_changes",
+          {
+            event: "UPDATE",
+            schema: "public",
+            table: "notifications",
+            filter: `user_id=eq.${user.id}`,
+          },
+          (payload) => {
+            const updatedNotification = payload.new as Notification;
+            setNotifications((prev) =>
+              prev.map((n) => (n.id === updatedNotification.id ? updatedNotification : n))
+            );
+          }
+        )
+        .subscribe();
+    };
+
+    let idleCallbackId: number;
+    let timeoutId: NodeJS.Timeout;
+
+    if (typeof requestIdleCallback !== 'undefined') {
+      idleCallbackId = requestIdleCallback(runLoad);
+    } else {
+      timeoutId = setTimeout(runLoad, 500);
+    }
 
     return () => {
-      supabase.removeChannel(channel);
+      isActive = false;
+      if (typeof cancelIdleCallback !== 'undefined') {
+        cancelIdleCallback(idleCallbackId);
+      }
+      clearTimeout(timeoutId);
+      if (channel) {
+        supabase.removeChannel(channel);
+      }
     };
   }, [user?.id, loadNotifications]);
 

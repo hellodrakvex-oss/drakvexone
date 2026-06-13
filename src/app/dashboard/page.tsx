@@ -16,6 +16,7 @@ import { useAuth } from "@/contexts/auth-context";
 import { fetchDashboardData, type DashboardMetrics } from "@/lib/supabase/dashboard";
 import { useNotifications } from "@/contexts/notifications-context";
 import { useSearch } from "@/contexts/search-context";
+import Image from "next/image";
 
 const chartConfig = {
   sales: {
@@ -24,7 +25,8 @@ const chartConfig = {
   },
 } satisfies ChartConfig;
 
-let globalDashboardMetricsCache: DashboardMetrics | null = null;
+let globalDashboardMetricsCache: { data: DashboardMetrics; timestamp: number } | null = null;
+const CACHE_DURATION = 60000; // 60 seconds
 
 export default function Dashboard() {
   const { user, isLoading: isAuthLoading } = useAuth();
@@ -32,13 +34,11 @@ export default function Dashboard() {
   const { openSearch } = useSearch();
   const router = useRouter();
   const [activeBar, setActiveBar] = useState<number | null>(null);
-  const [metrics, setMetrics] = useState<DashboardMetrics | null>(globalDashboardMetricsCache);
+  const [metrics, setMetrics] = useState<DashboardMetrics | null>(globalDashboardMetricsCache?.data || null);
   const [isLoading, setIsLoading] = useState(!globalDashboardMetricsCache);
-
 
   useEffect(() => {
     async function loadDashboard() {
-
       // Wait for auth initialization to complete
       if (isAuthLoading) {
         return;
@@ -52,12 +52,25 @@ export default function Dashboard() {
       }
 
       try {
-        if (!globalDashboardMetricsCache) setIsLoading(true);
-        const data = await fetchDashboardData(user.id);
-        globalDashboardMetricsCache = data;
-        setMetrics(data);
+        const now = Date.now();
+        const isCacheValid = globalDashboardMetricsCache && (now - globalDashboardMetricsCache.timestamp < CACHE_DURATION);
+
+        if (globalDashboardMetricsCache) {
+          // Instant render from cache
+          setMetrics(globalDashboardMetricsCache.data);
+          setIsLoading(false); 
+        } else {
+          setIsLoading(true);
+        }
+
+        // If cache is missing or stale, fetch data (background refresh if stale)
+        if (!isCacheValid) {
+          const data = await fetchDashboardData(user.id);
+          globalDashboardMetricsCache = { data, timestamp: Date.now() };
+          setMetrics(data);
+        }
       } catch (error) {
-        console.error('[Dashboard] Failed to load dashboard data.');
+        console.error('[Dashboard] Failed to load dashboard data.', error);
       } finally {
         setIsLoading(false);
       }
@@ -116,12 +129,15 @@ export default function Dashboard() {
       {/* Sticky Header */}
       <header className="sticky top-0 z-40 glass-panel-heavy border-x-0 border-t-0 border-b border-white/10 px-4 md:px-6 py-4 flex justify-between items-center mb-6">
         <div className="flex items-center gap-3">
-          <div className="hidden sm:block">
-            <DrakvexLogo size={32} variant="mono" className="opacity-80 text-primary" />
-          </div>
-          <div className="block sm:hidden">
-            <DrakvexLogo size={24} variant="mono" className="opacity-80 text-primary" />
-          </div>
+         <div className="relative w-10 h-10 sm:w-12 sm:h-12">
+  <Image
+    src="/drakvexonebg logo.png"
+    alt="Drakvex One"
+    fill
+    className="object-contain"
+    priority
+  />
+</div>
           <div className="space-y-1">
             <p className="text-[11px] font-semibold tracking-widest text-primary/80 uppercase">
               {currentDate}

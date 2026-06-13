@@ -6,10 +6,10 @@ export const easings = {
 };
 
 export const durations = {
-  page: 0.28,
-  item: 0.25,
+  page: 0.20,
+  item: 0.15,
   stagger: 0.04,
-  modal: 0.22,
+  modal: 0.15,
   splash: 0.8,
   empty: 0.35,
 };
